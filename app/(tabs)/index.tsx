@@ -1,100 +1,207 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  FlatList,
+  ScrollView,
+  Dimensions,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Header from "@/components/Header";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
-import { Text } from '@react-navigation/elements';
+const { width } = Dimensions.get("window");
 
-export default function HomeScreen() {
+type Task = {
+  id: string;
+  title: string;
+  status: "new" | "scheduled" | "progress" | "completed";
+};
+
+export default function Kanban() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  const loadTasks = async () => {
+    try {
+      const data = await AsyncStorage.getItem("tasks");
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) setTasks(parsed);
+        else setTasks([]);
+      }
+    } catch (e) {
+      console.log("Error loading tasks:", e);
+      setTasks([]);
+    }
+  };
+
+  const saveTasks = async (newTasks: Task[]) => {
+    setTasks(newTasks);
+    await AsyncStorage.setItem("tasks", JSON.stringify(newTasks));
+  };
+
+  const addTask = () => {
+    if (!newTaskTitle.trim()) return;
+    const newTask: Task = {
+      id: Date.now().toString(),
+      title: newTaskTitle,
+      status: "new",
+    };
+    const updated = [...tasks, newTask];
+    saveTasks(updated);
+    setNewTaskTitle("");
+    setModalVisible(false);
+  };
+
+  const changeStatus = (id: string, newStatus: Task["status"]) => {
+    const updated = tasks.map((task) =>
+      task.id === id ? { ...task, status: newStatus } : task
+    );
+    saveTasks(updated);
+  };
+
+  const deleteTask = (id: string) => {
+    const updated = tasks.filter((t) => t.id !== id);
+    saveTasks(updated);
+  };
+
+  const renderColumn = (
+    title: string,
+    status: Task["status"],
+    color: string
+  ) => (
+    <View
+      style={{ width: width / 2.3 }}
+      className="mx-2 my-4 bg-gray-100 rounded-2xl p-4"
+    >
+      <Text
+        className="text-xl font-bold mb-3"
+        style={{
+          color,
+          textShadowColor: "#d1d5db",
+          textShadowRadius: 3,
+        }}
+      >
+        {title}
+      </Text>
+
+      <FlatList
+        data={tasks.filter((t) => t.status === status)}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item }) => (
+          <View className="bg-white p-4 mb-3 rounded-2xl shadow-sm border border-gray-100">
+            <Text className="text-gray-800 font-semibold mb-2">
+              {item.title}
+            </Text>
+
+            <View className="flex-row justify-between items-center">
+              <View className="flex-row flex-wrap">
+                {["new", "scheduled", "progress", "completed"].map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    onPress={() => changeStatus(item.id, s as Task["status"])}
+                    className={`px-3 py-1 rounded-full mr-2 mb-2 ${
+                      item.status === s
+                        ? "bg-blue-600"
+                        : "bg-gray-200 border border-gray-300"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-medium ${
+                        item.status === s ? "text-white" : "text-gray-600"
+                      }`}
+                    >
+                      {s === "new"
+                        ? "New"
+                        : s === "scheduled"
+                        ? "Scheduled"
+                        : s === "progress"
+                        ? "Progress"
+                        : "Done"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity onPress={() => deleteTask(item.id)}>
+                <Ionicons name="trash-outline" size={18} color="#dc2626" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      />
+    </View>
+  );
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <Text className="text-red-600 font-semibold text-4xl">Welcome! </Text>
-        <Text className="text-red-600 font-semibold text-4xl">hello! </Text>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView className="flex-1 bg-white">
+      <Header title="Task Manager" />
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {/* Horizontal Scroll for Columns */}
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        className="flex-1"
+      >
+        {renderColumn("New Task", "new", "#2563eb")}
+        {renderColumn("Scheduled", "scheduled", "#059669")}
+        {renderColumn("In Progress", "progress", "#ca8a04")}
+        {renderColumn("Completed", "completed", "#7c3aed")}
+      </ScrollView>
+
+      {/* Add Task Modal */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/40">
+          <View className="bg-white w-96 p-5 rounded-2xl">
+            <Text className="text-lg font-semibold mb-2">Add New Task</Text>
+            <TextInput
+              placeholder="Enter task name..."
+              className="border border-gray-300 rounded-lg p-2 mb-4"
+              value={newTaskTitle}
+              onChangeText={setNewTaskTitle}
+            />
+            <View className="flex-row justify-end">
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                className="px-4 py-2 rounded-lg mr-2 bg-gray-300"
+              >
+                <Text>Cancel  </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={addTask}
+                className="px-4 py-2 rounded-lg bg-blue-600"
+              >
+                <Text className="text-white font-medium">Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Floating Add Button */}
+      <TouchableOpacity
+        onPress={() => setModalVisible(true)}
+        className="absolute bottom-6 right-6 bg-blue-600 rounded-full p-4 shadow-lg mb-24"
+      >
+        <Ionicons name="add" size={28} color="white" />
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
